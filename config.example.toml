@@ -1,0 +1,55 @@
+# Configuração do whispering-call.
+# Copie para config.toml e ajuste. Caminhos relativos são resolvidos a partir
+# da pasta onde este arquivo está. No Windows, prefira aspas simples para
+# caminhos (literal TOML, sem escapes): folder = 'C:\Users\eu\Gravações'
+
+[recordings]
+# Pasta onde ficam as gravações (ex.: pasta do Google Drive sincronizada no disco).
+folder = "recordings"
+# Extensões aceitas (áudio ou vídeo; o vídeo é transcrito direto, sem extrair áudio).
+extensions = [".mp4", ".mkv", ".webm", ".mov", ".m4a", ".mp3", ".wav"]
+# true = procura também em subpastas.
+recursive = false
+
+[output]
+# Cada gravação ganha uma subpasta com transcript.md, doc_prompt.md e doc.md.
+# O log JSON fica em <folder>/whispering-call.log.
+folder = "output"
+
+[transcription]
+# Modelos: tiny, base, small, medium, large-v3, large-v3-turbo, ...
+model = "large-v3"
+# Idioma fixo evita erro de autodetecção (código ISO 639-1).
+language = "pt"
+# "cuda" (GPU NVIDIA), "cpu" ou "auto".
+device = "cuda"
+# GPU: "int8_float16" (menos VRAM) ou "float16". CPU: "int8".
+compute_type = "int8_float16"
+beam_size = 5
+# Remove silêncios longos antes de transcrever (mais rápido, menos alucinação).
+vad_filter = true
+
+[claude]
+# Comando ou caminho absoluto do Claude Code.
+executable = "claude"
+# Prompt com as instruções de geração da doc.
+prompt_file = "prompts/doc_prompt.md"
+# "same_terminal": abre o Claude neste terminal, uma reunião por vez.
+# "new_window":   abre uma janela de terminal por reunião e não espera.
+launch_mode = "same_terminal"
+# Argumentos extras para o claude, ex.: ["--model", "opus"].
+extra_args = []
+# Terminal usado em launch_mode = "new_window". Vazio = padrão do SO:
+#   Linux:   ["konsole", "--workdir", "{cwd}", "-e", "{command}"]
+#   Windows: ["cmd", "/c", "start", "whispering call", "/D", "{cwd}", "{command}"]
+# {command} vira o comando completo do Claude; {cwd} vira a pasta da reunião.
+# Exemplos:
+#   ["kitty", "--directory", "{cwd}", "{command}"]
+#   ["alacritty", "--working-directory", "{cwd}", "-e", "{command}"]
+#   ["gnome-terminal", "--working-directory={cwd}", "--", "{command}"]
+#   ["wt", "-d", "{cwd}", "{command}"]   # Windows Terminal
+new_window_command = []
+
+[logging]
+# DEBUG, INFO, WARNING ou ERROR.
+level = "INFO"

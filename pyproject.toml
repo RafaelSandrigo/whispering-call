@@ -1,0 +1,41 @@
+[project]
+name = "whispering-call"
+version = "0.1.0"
+description = "Automatiza: gravação de reunião → transcrição (faster-whisper) → documento (Claude Code)."
+readme = "README.md"
+license = "MIT"
+# ctranslate2 (motor do faster-whisper) ainda não publica wheels estáveis para 3.14.
+requires-python = ">=3.12,<3.14"
+dependencies = [
+    "faster-whisper>=1.1",
+    # cuBLAS/cuDNN via pip evitam instalar o CUDA Toolkit no sistema (Linux e Windows).
+    # Ver src/whispering_call/cuda_runtime.py para como são carregadas.
+    "nvidia-cublas-cu12>=12.4",
+    "nvidia-cudnn-cu12>=9,<10",
+]
+
+[project.scripts]
+whispering-call = "whispering_call.cli:main"
+
+[dependency-groups]
+dev = ["pytest>=8.3", "black>=24.8", "mypy>=1.11"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/whispering_call"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src", "tests"]
+
+[tool.mypy]
+strict = true
+files = ["src", "tests"]
+mypy_path = ["src", "tests"]
+
+[[tool.mypy.overrides]]
+module = ["faster_whisper", "faster_whisper.*"]
+ignore_missing_imports = true
