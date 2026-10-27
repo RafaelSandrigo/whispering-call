@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from whispering_call.claude_launcher import ClaudeSession
+from whispering_call.cuda_runtime import CudaStatus
 from whispering_call.errors import ClaudeLaunchError
 from whispering_call.recordings import Recording
 from whispering_call.transcription import ProgressCallback, TranscriptSegment
@@ -152,3 +153,32 @@ class FakeNativeLibraryLoader:
 
     def add_dll_folder(self, folder: Path) -> None:
         self.dll_folders.append(folder)
+
+
+class FakeCudaProbe:
+    """Simula a sondagem de GPU: NVIDIA presente ou ausente (Intel/AMD)."""
+
+    def __init__(self, available: bool, reason: str = "RTX falsa") -> None:
+        self._status = CudaStatus(available, reason)
+        self.calls = 0
+
+    def status(self) -> CudaStatus:
+        self.calls += 1
+        return self._status
+
+
+class ScriptedAnswers:
+    """Simula o teclado: devolve as respostas em ordem e registra as perguntas.
+
+    Sem respostas sobrando, levanta ``EOFError`` como o ``input`` com stdin fechado.
+    """
+
+    def __init__(self, *answers: str) -> None:
+        self._answers = list(answers)
+        self.questions: list[str] = []
+
+    def __call__(self, question: str) -> str:
+        self.questions.append(question)
+        if not self._answers:
+            raise EOFError
+        return self._answers.pop(0)

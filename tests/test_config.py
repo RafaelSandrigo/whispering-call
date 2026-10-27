@@ -23,7 +23,9 @@ def test_empty_config_uses_defaults_relative_to_config_folder(tmp_path: Path) ->
     assert config.recordings.folder == (tmp_path / "recordings").resolve()
     assert config.recordings.extensions == DEFAULT_EXTENSIONS
     assert config.output.folder == (tmp_path / "output").resolve()
-    assert config.transcription.model == "large-v3"
+    assert config.transcription.model == "small"
+    assert config.transcription.device == "auto"
+    assert config.transcription.compute_type == "auto"
     assert config.transcription.language == "pt"
     assert config.claude.launch_mode is LaunchMode.SAME_TERMINAL
     assert (

@@ -1,3 +1,5 @@
+import os
+import time
 from pathlib import Path
 
 import pytest
@@ -12,7 +14,37 @@ def touch(path: Path) -> Path:
     return path
 
 
-def test_lists_only_matching_extensions_sorted(tmp_path: Path) -> None:
+def set_age(path: Path, seconds_ago: int) -> None:
+    moment = time.time_ns() - seconds_ago * 1_000_000_000
+    os.utime(path, ns=(moment, moment))
+
+
+def test_lists_newest_first_regardless_of_name(tmp_path: Path) -> None:
+    set_age(touch(tmp_path / "a_antiga.mp4"), seconds_ago=300)
+    set_age(touch(tmp_path / "z_nova.mp4"), seconds_ago=10)
+    set_age(touch(tmp_path / "m_media.mp4"), seconds_ago=100)
+
+    source = LocalFolderRecordingSource(tmp_path, (".mp4",), recursive=False)
+
+    assert [r.key for r in source.list_recordings()] == [
+        "z_nova.mp4",
+        "m_media.mp4",
+        "a_antiga.mp4",
+    ]
+
+
+def test_same_modification_time_falls_back_to_path_order(tmp_path: Path) -> None:
+    for name in ("b.mp4", "a.mp4"):
+        set_age(touch(tmp_path / name), seconds_ago=50)
+    same_moment = (tmp_path / "a.mp4").stat().st_mtime_ns
+    os.utime(tmp_path / "b.mp4", ns=(same_moment, same_moment))
+
+    source = LocalFolderRecordingSource(tmp_path, (".mp4",), recursive=False)
+
+    assert [r.key for r in source.list_recordings()] == ["a.mp4", "b.mp4"]
+
+
+def test_lists_only_matching_extensions(tmp_path: Path) -> None:
     touch(tmp_path / "b.MP4")
     touch(tmp_path / "a.mkv")
     touch(tmp_path / "notes.txt")
@@ -20,7 +52,7 @@ def test_lists_only_matching_extensions_sorted(tmp_path: Path) -> None:
 
     source = LocalFolderRecordingSource(tmp_path, (".mp4", ".mkv"), recursive=False)
 
-    assert [r.key for r in source.list_recordings()] == ["a.mkv", "b.MP4"]
+    assert sorted(r.key for r in source.list_recordings()) == ["a.mkv", "b.MP4"]
 
 
 def test_non_recursive_ignores_subfolders(tmp_path: Path) -> None:

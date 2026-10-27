@@ -18,13 +18,28 @@ import importlib.util
 import logging
 import os
 import sys
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
 logger = logging.getLogger(__name__)
 
 NVIDIA_PACKAGES: tuple[str, ...] = ("nvidia.cublas", "nvidia.cudnn")
+
+GPU_EXTRA_HINT = "com GPU NVIDIA, rode `uv sync --extra gpu`"
+
+
+@dataclass(frozen=True)
+class CudaStatus:
+    """Se há GPU CUDA utilizável; ``reason`` explica o resultado ao usuário."""
+
+    available: bool
+    reason: str
+
+
+class CudaProbe(Protocol):
+    def status(self) -> CudaStatus: ...
 
 
 class NativeLibraryLoader(Protocol):
@@ -121,3 +136,48 @@ class SystemNativeLibraryLoader:
         # Algumas DLLs são carregadas via LoadLibrary sem as flags que consultam
         # add_dll_directory; o PATH cobre esse caso.
         os.environ["PATH"] = str(folder) + os.pathsep + os.environ.get("PATH", "")
+
+
+def ctranslate2_cuda_device_count() -> int:
+    """Quantas GPUs CUDA o CTranslate2 enxerga (0 em Intel/AMD ou sem driver NVIDIA)."""
+    # Importação tardia: carregar o CTranslate2 custa segundos.
+    import ctranslate2
+
+    return int(ctranslate2.get_cuda_device_count())
+
+
+class SystemCudaProbe:
+    """Registra as libs CUDA dos pacotes pip e consulta se há GPU NVIDIA utilizável.
+
+    Exemplo::
+
+        SystemCudaProbe(SystemNativeLibraryLoader(), sys.platform).status().available
+    """
+
+    def __init__(
+        self,
+        loader: NativeLibraryLoader,
+        platform: str,
+        count_devices: Callable[[], int] = ctranslate2_cuda_device_count,
+    ) -> None:
+        self._loader = loader
+        self._platform = platform
+        self._count_devices = count_devices
+
+    def status(self) -> CudaStatus:
+        folders = register_nvidia_libraries(self._loader, self._platform)
+        # No Windows não há CUDA de sistema para o cuDNN: sem os wheels nvidia-*
+        # o CTranslate2 acharia a GPU e falharia só na primeira inferência.
+        # No Linux o CUDA pode vir do sistema, então a ausência dos wheels não conta.
+        if self._platform == "win32" and not folders:
+            return CudaStatus(False, f"pacotes nvidia-* ausentes ({GPU_EXTRA_HINT})")
+        return self._device_status()
+
+    def _device_status(self) -> CudaStatus:
+        try:
+            count = self._count_devices()
+        except Exception as error:  # driver/DLL quebrados vêm como erros variados
+            return CudaStatus(False, f"falha ao consultar a GPU: {error}")
+        if count <= 0:
+            return CudaStatus(False, "nenhuma GPU NVIDIA com driver CUDA encontrada")
+        return CudaStatus(True, f"{count} GPU(s) CUDA")

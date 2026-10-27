@@ -30,8 +30,16 @@ class RecordingSource(Protocol):
     def list_recordings(self) -> list[Recording]: ...
 
 
+def _newest_first(media_file: Path) -> tuple[int, str]:
+    # mtime_ns negado inverte a ordem sem inverter o desempate pelo caminho.
+    return (-media_file.stat().st_mtime_ns, media_file.as_posix())
+
+
 class LocalFolderRecordingSource:
-    """Lista arquivos de áudio/vídeo de uma pasta local, em ordem de caminho.
+    """Lista arquivos de áudio/vídeo de uma pasta local, do mais novo ao mais antigo.
+
+    A ordem é a da data de modificação do arquivo (empate: ordem do caminho). Assim
+    ``--limit N`` pega as gravações mais recentes.
 
     Exemplo::
 
@@ -56,7 +64,10 @@ class LocalFolderRecordingSource:
         candidates = (
             self._folder.rglob("*") if self._recursive else self._folder.glob("*")
         )
-        media_files = sorted(path for path in candidates if self._is_media_file(path))
+        media_files = sorted(
+            (path for path in candidates if self._is_media_file(path)),
+            key=_newest_first,
+        )
         return [self._to_recording(media_file) for media_file in media_files]
 
     def _is_media_file(self, path: Path) -> bool:

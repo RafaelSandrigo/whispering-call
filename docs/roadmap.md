@@ -34,7 +34,17 @@ Pontos a decidir antes de implementar:
 - **Arquivos ainda sendo gerados:** o Meet publica a gravação minutos depois da
   reunião; pular arquivos sem `md5Checksum`/tamanho final.
 
-## 2. Outras ideias
+## 2. Desempenho em CPU: `cpu_threads`
+
+**Hoje:** o `WhisperModel` é criado sem `cpu_threads`, e o CTranslate2 usa 4
+threads por padrão. Em CPUs com mais núcleos isso desperdiça a máquina.
+
+**Proposta:** chave `[transcription].cpu_threads` (inteiro; `0` = padrão do
+CTranslate2) repassada em `load_faster_whisper_model`, só quando o dispositivo
+resolvido for CPU. Avaliar usar o número de núcleos físicos como valor
+automático, já que hyper-threading costuma não ajudar na inferência.
+
+## 3. Outras ideias
 
 - **Gravação ainda sendo copiada/sincronizada:** ignorar arquivos modificados há
   menos de N segundos (`[recordings].min_age_seconds`).

@@ -8,8 +8,15 @@ license = "MIT"
 requires-python = ">=3.12,<3.14"
 dependencies = [
     "faster-whisper>=1.1",
-    # cuBLAS/cuDNN via pip evitam instalar o CUDA Toolkit no sistema (Linux e Windows).
-    # Ver src/whispering_call/cuda_runtime.py para como são carregadas.
+    # av 19 removeu o argumento `metadata_errors` que o faster-whisper 1.2.x usa ao
+    # abrir o arquivo (TypeError ao transcrever); 18 e anteriores funcionam.
+    "av<19",
+]
+
+[project.optional-dependencies]
+# Só para quem tem GPU NVIDIA: `uv sync --extra gpu`. cuBLAS/cuDNN via pip evitam
+# instalar o CUDA Toolkit no sistema (Linux e Windows); ver cuda_runtime.py.
+gpu = [
     "nvidia-cublas-cu12>=12.4",
     "nvidia-cudnn-cu12>=9,<10",
 ]
@@ -37,5 +44,5 @@ files = ["src", "tests"]
 mypy_path = ["src", "tests"]
 
 [[tool.mypy.overrides]]
-module = ["faster_whisper", "faster_whisper.*"]
+module = ["faster_whisper", "faster_whisper.*", "ctranslate2", "ctranslate2.*"]
 ignore_missing_imports = true

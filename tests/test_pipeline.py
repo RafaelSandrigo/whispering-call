@@ -12,6 +12,7 @@ from whispering_call.errors import PromptFileError
 from whispering_call.meeting_workspace import MeetingWorkspace
 from whispering_call.pipeline import MeetingDocPipeline, read_prompt_template
 from whispering_call.recordings import Recording
+from whispering_call.run_limit import FixedLimit
 from whispering_call.transcription import TranscriptSegment
 
 SEGMENTS = [TranscriptSegment(0.0, 3.0, "Decidimos lançar sexta.")]
@@ -154,3 +155,44 @@ def test_read_prompt_template_missing_file(tmp_path: Path) -> None:
 def test_read_prompt_template_empty_file(tmp_path: Path) -> None:
     with pytest.raises(PromptFileError, match="vazio"):
         read_prompt_template(make_prompt(tmp_path, "   \n"))
+
+
+def test_limit_processes_first_n_and_defers_the_rest(tmp_path: Path) -> None:
+    recordings = [make_recording(tmp_path, key) for key in ("a.mp4", "b.mp4", "c.mp4")]
+    transcriber, launcher = FakeTranscriber(SEGMENTS), FakeClaudeLauncher()
+    pipeline = MeetingDocPipeline(
+        source=FakeRecordingSource(recordings),
+        transcriber=transcriber,
+        launcher=launcher,
+        output_root=tmp_path / "output",
+        prompt_file=make_prompt(tmp_path),
+        reporter=RecordingReporter(),
+        limit_policy=FixedLimit(2),
+    )
+
+    summary = pipeline.run()
+
+    assert summary.transcribed == ["a.mp4", "b.mp4"]
+    assert summary.launched == ["a.mp4", "b.mp4"]
+    assert summary.deferred == ["c.mp4"]
+
+
+def test_limit_does_not_count_recordings_that_already_have_doc(tmp_path: Path) -> None:
+    done, todo = make_recording(tmp_path, "a.mp4"), make_recording(tmp_path, "b.mp4")
+    workspace = MeetingWorkspace(tmp_path / "output" / "a_mp4")
+    workspace.folder.mkdir(parents=True)
+    workspace.doc_file.write_text("# Doc", encoding="utf-8")
+    pipeline = MeetingDocPipeline(
+        source=FakeRecordingSource([done, todo]),
+        transcriber=FakeTranscriber(SEGMENTS),
+        launcher=FakeClaudeLauncher(),
+        output_root=tmp_path / "output",
+        prompt_file=make_prompt(tmp_path),
+        reporter=RecordingReporter(),
+        limit_policy=FixedLimit(1),
+    )
+
+    summary = pipeline.run()
+
+    assert summary.launched == ["b.mp4"]
+    assert summary.deferred == []

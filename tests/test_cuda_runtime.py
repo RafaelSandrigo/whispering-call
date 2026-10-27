@@ -1,7 +1,12 @@
+from collections.abc import Callable
 from pathlib import Path
 
 from fakes import FakeNativeLibraryLoader
-from whispering_call.cuda_runtime import load_until_stable, register_nvidia_libraries
+from whispering_call.cuda_runtime import (
+    SystemCudaProbe,
+    load_until_stable,
+    register_nvidia_libraries,
+)
 
 
 def make_package(root: Path, subfolder: str, library_names: list[str]) -> Path:
@@ -62,3 +67,53 @@ def test_load_until_stable_returns_libraries_that_never_load() -> None:
 
     assert never_loaded == [Path("libquebrada.so")]
     assert loader.loaded == ["libok.so"]
+
+
+def counting(value: int) -> Callable[[], int]:
+    return lambda: value
+
+
+def failing_count() -> int:
+    raise OSError("cudart64_12.dll não encontrada")
+
+
+def test_probe_reports_gpu_when_driver_sees_devices(tmp_path: Path) -> None:
+    cudnn = make_package(tmp_path / "cudnn", "bin", ["cudnn64_9.dll"])
+    loader = FakeNativeLibraryLoader({"nvidia.cudnn": [cudnn]})
+
+    status = SystemCudaProbe(loader, "win32", counting(1)).status()
+
+    assert status.available
+    assert loader.dll_folders == [cudnn / "bin"]
+
+
+def test_probe_on_windows_requires_pip_nvidia_packages() -> None:
+    status = SystemCudaProbe(FakeNativeLibraryLoader({}), "win32", counting(1)).status()
+
+    assert not status.available
+    assert "uv sync --extra gpu" in status.reason
+
+
+def test_probe_on_linux_accepts_system_cuda_without_pip_packages() -> None:
+    status = SystemCudaProbe(FakeNativeLibraryLoader({}), "linux", counting(1)).status()
+
+    assert status.available
+
+
+def test_probe_without_nvidia_device_is_unavailable(tmp_path: Path) -> None:
+    cudnn = make_package(tmp_path / "cudnn", "bin", ["cudnn64_9.dll"])
+    loader = FakeNativeLibraryLoader({"nvidia.cudnn": [cudnn]})
+
+    status = SystemCudaProbe(loader, "win32", counting(0)).status()
+
+    assert not status.available
+    assert "NVIDIA" in status.reason
+
+
+def test_probe_turns_driver_errors_into_unavailable() -> None:
+    status = SystemCudaProbe(
+        FakeNativeLibraryLoader({}), "linux", failing_count
+    ).status()
+
+    assert not status.available
+    assert "cudart64_12.dll" in status.reason

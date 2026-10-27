@@ -17,14 +17,20 @@ recursive = false
 folder = "output"
 
 [transcription]
-# Modelos: tiny, base, small, medium, large-v3, large-v3-turbo, ...
-model = "large-v3"
+# Modelos (do mais leve ao mais preciso): tiny, base, small, medium,
+# large-v3-turbo, large-v3. O padrão "small" roda bem em CPU; com GPU NVIDIA
+# vale trocar por "large-v3-turbo" ou "large-v3". Baixado na primeira execução.
+model = "small"
 # Idioma fixo evita erro de autodetecção (código ISO 639-1).
 language = "pt"
-# "cuda" (GPU NVIDIA), "cpu" ou "auto".
-device = "cuda"
-# GPU: "int8_float16" (menos VRAM) ou "float16". CPU: "int8".
-compute_type = "int8_float16"
+# "auto" (padrão): usa a GPU NVIDIA se houver e cai para CPU se não houver
+# (Intel integrada e AMD não aceleram o faster-whisper: rodam em CPU).
+# "cuda" também cai para CPU com aviso; "cpu" nunca procura GPU.
+device = "auto"
+# "auto" (padrão) escolhe "int8_float16" na GPU e "int8" na CPU. Valores
+# explícitos: GPU "float16" ou "int8_float16"; CPU "int8" (tipos com float16
+# são trocados por "int8" em CPU).
+compute_type = "auto"
 beam_size = 5
 # Remove silêncios longos antes de transcrever (mais rápido, menos alucinação).
 vad_filter = true

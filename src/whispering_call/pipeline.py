@@ -17,6 +17,7 @@ from whispering_call.claude_prompt import build_initial_prompt
 from whispering_call.errors import ClaudeLaunchError, PromptFileError
 from whispering_call.meeting_workspace import MeetingWorkspace, workspace_for
 from whispering_call.recordings import Recording, RecordingSource
+from whispering_call.run_limit import AllPending, RunLimitPolicy
 from whispering_call.transcript_markdown import render_transcript_markdown
 from whispering_call.transcription import Transcriber
 
@@ -36,6 +37,7 @@ class RunSummary:
     transcribed: list[str] = field(default_factory=list)
     launched: list[str] = field(default_factory=list)
     already_documented: list[str] = field(default_factory=list)
+    deferred: list[str] = field(default_factory=list)
     failed: list[str] = field(default_factory=list)
 
 
@@ -46,7 +48,8 @@ class _MeetingJob:
 
 
 class MeetingDocPipeline:
-    """Processa todas as gravações que ainda não têm ``doc.md``.
+    """Processa as gravações que ainda não têm ``doc.md`` (todas, ou as primeiras N
+    conforme a ``RunLimitPolicy``; as demais ficam em ``RunSummary.deferred``).
 
     Exemplo::
 
@@ -63,6 +66,7 @@ class MeetingDocPipeline:
         output_root: Path,
         prompt_file: Path,
         reporter: RunReporter,
+        limit_policy: RunLimitPolicy | None = None,
     ) -> None:
         self._source = source
         self._transcriber = transcriber
@@ -70,11 +74,12 @@ class MeetingDocPipeline:
         self._output_root = output_root
         self._prompt_file = prompt_file
         self._reporter = reporter
+        self._limit_policy = limit_policy or AllPending()
 
     def run(self) -> RunSummary:
         prompt_text = read_prompt_template(self._prompt_file)
         summary = RunSummary()
-        pending_jobs = self._collect_pending_jobs(summary)
+        pending_jobs = self._apply_limit(self._collect_pending_jobs(summary), summary)
         transcribed_jobs = [
             job for job in pending_jobs if self._ensure_transcript(job, summary)
         ]
@@ -91,6 +96,15 @@ class MeetingDocPipeline:
             j.recording.key for j in jobs if j.workspace.has_doc()
         )
         return [job for job in jobs if not job.workspace.has_doc()]
+
+    def _apply_limit(
+        self, jobs: list[_MeetingJob], summary: RunSummary
+    ) -> list[_MeetingJob]:
+        limit = self._limit_policy.choose([job.recording.key for job in jobs])
+        if limit is None:
+            return jobs
+        summary.deferred.extend(job.recording.key for job in jobs[limit:])
+        return jobs[:limit]
 
     def _ensure_transcript(self, job: _MeetingJob, summary: RunSummary) -> bool:
         if job.workspace.has_transcript():

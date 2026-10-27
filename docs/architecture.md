@@ -9,6 +9,7 @@ cli.main
        └─ MeetingDocPipeline.run()
             1. read_prompt_template()               falha cedo se o prompt não existir
             2. RecordingSource.list_recordings()
+               RunLimitPolicy.choose(pendentes) → processa só as N primeiras
             3. para cada gravação sem doc.md:
                  se não há transcript.md → Transcriber.transcribe() → save_transcript()
             4. para cada gravação transcrita:
@@ -26,12 +27,14 @@ cli.main
 | `meeting_workspace.py` | Pasta de saída por reunião, nomes válidos em Windows/Linux, escrita atômica. |
 | `transcription.py` | Contrato `Transcriber` e `TranscriptSegment`, independentes do motor. |
 | `faster_whisper_transcriber.py` | Adaptador do faster-whisper (import tardio, modelo carregado uma vez). |
-| `cuda_runtime.py` | Torna cuBLAS/cuDNN dos wheels `nvidia-*` visíveis ao CTranslate2. |
+| `cuda_runtime.py` | Torna cuBLAS/cuDNN dos wheels `nvidia-*` visíveis ao CTranslate2 e sonda se há GPU NVIDIA utilizável (`SystemCudaProbe`). |
+| `device_selection.py` | Resolve `device`/`compute_type` `auto` em valores reais (GPU ou CPU) a partir da sondagem. |
 | `transcript_markdown.py` | Renderiza a transcrição como `- [HH:MM:SS] texto`. |
 | `claude_prompt.py` | Monta o prompt inicial com os três caminhos. |
 | `claude_launcher.py` | Launchers `same_terminal` e `new_window` e montagem do comando. |
 | `process_runner.py` | Wrapper do `subprocess`, com o tratamento de Ctrl+C. |
 | `pipeline.py` | Orquestração e resumo da execução (`RunSummary`). |
+| `run_limit.py` | `RunLimitPolicy`: quantas pendentes processar (`AllPending`, `FixedLimit` de `--limit`, `AskUserLimit` interativa). |
 | `console_reporter.py` | Saída de texto simples para o usuário. |
 | `json_logging.py` | Logs estruturados em JSON no arquivo de log. |
 
@@ -54,6 +57,15 @@ apagando um arquivo, e o modo `new_window` funciona igual, já que não temos
 como saber quando aquela janela termina. A transcrição é gravada de forma
 atômica (`.partial` seguido de rename) para que um arquivo pela metade nunca
 pareça completo.
+
+### Limite por execução e pergunta interativa
+A fonte local ordena as gravações da mais nova para a mais antiga (`st_mtime_ns`, desempate pelo caminho), então o limite pega as mais recentes. O critério é a data de modificação porque é a única portátil entre Windows e Linux (data de criação não é).
+O pipeline não conhece teclado nem argparse: depois de listar as pendentes ele
+consulta uma `RunLimitPolicy` injetada. A CLI escolhe a política em
+`choose_limit_policy`: `--limit` > `--all` > (sem terminal) todas > perguntar.
+Sem TTY nunca se pergunta, para que cron/CI não travem esperando entrada. O
+limite conta gravações pendentes (sem `doc.md`), não só as que precisam de
+transcrição, porque cada uma abre uma sessão do Claude, que é a etapa interativa.
 
 ### Transcrever tudo antes de abrir o Claude
 A transcrição é longa e não exige interação. Fazê-la toda primeiro deixa as
@@ -87,6 +99,27 @@ Toolkit. No Linux, cada `.so` é pré-carregado com `RTLD_GLOBAL`, repetindo as
 que falham enquanto houver progresso, porque as sub-libs do cuDNN dependem
 umas das outras. No Windows, a pasta `bin` é registrada com
 `os.add_dll_directory` e no `PATH`.
+
+### GPU opcional com fallback para CPU
+Só o CUDA acelera o CTranslate2; Intel integrada e AMD não têm backend. Por isso
+`device = "auto"` (padrão) sonda a GPU na primeira transcrição
+(`ResolvingModelFactory`, preguiçosa para não custar nada sem gravações novas) e
+cai para CPU com `int8`, avisando o motivo. `device = "cuda"` também cai para
+CPU em vez de falhar. No Windows os wheels `nvidia-*` são exigidos para contar a
+GPU como disponível, porque sem eles o CTranslate2 acharia a placa e falharia só
+na primeira inferência. Esses wheels ficam no extra `gpu` (`uv sync --extra gpu`)
+para não baixar centenas de MB em máquinas sem NVIDIA.
+
+### Modelo padrão `small`
+`large-v3` é inviável em CPU. O padrão leve funciona em qualquer máquina; quem
+tem GPU troca `[transcription].model` na config.
+
+### `uv.lock` versionado
+O lock fixa o `av<19` e as versões do CTranslate2 (que definem a compatibilidade com cuDNN 9 e com GPUs novas, como a Blackwell). Reproduzir o ambiente exige commitá-lo.
+
+### `av<19`
+O PyAV 19 removeu o argumento `metadata_errors` usado pelo faster-whisper 1.2.x
+(`TypeError` ao abrir qualquer mídia). A versão fica limitada em `pyproject.toml`.
 
 ### Python 3.12
 O CTranslate2 (motor do faster-whisper) ainda não tem wheels estáveis para o

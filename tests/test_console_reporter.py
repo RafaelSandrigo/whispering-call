@@ -34,3 +34,9 @@ def test_summary_lists_only_non_empty_groups() -> None:
 
 def test_summary_without_recordings() -> None:
     assert format_run_summary(RunSummary()) == "Nenhuma gravação encontrada."
+
+
+def test_summary_lists_deferred_recordings() -> None:
+    text = format_run_summary(RunSummary(launched=["a.mp4"], deferred=["b.mp4"]))
+
+    assert "Pendentes (ficaram para a próxima execução): b.mp4" in text

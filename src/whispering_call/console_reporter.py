@@ -51,6 +51,7 @@ def format_run_summary(summary: RunSummary) -> str:
         ("Transcritas", summary.transcribed),
         ("Claude aberto para", summary.launched),
         ("Já documentadas", summary.already_documented),
+        ("Pendentes (ficaram para a próxima execução)", summary.deferred),
         ("Com falha (veja o log)", summary.failed),
     )
     lines = [f"{title}: {', '.join(keys)}" for title, keys in sections if keys]

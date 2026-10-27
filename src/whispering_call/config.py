@@ -24,6 +24,8 @@ DEFAULT_EXTENSIONS: tuple[str, ...] = (
 )
 COMMAND_PLACEHOLDER = "{command}"
 CWD_PLACEHOLDER = "{cwd}"
+# Leve o bastante para rodar em CPU; GPU NVIDIA aguenta "large-v3" (config.example.toml).
+DEFAULT_MODEL = "small"
 LOG_LEVELS: tuple[str, ...] = ("DEBUG", "INFO", "WARNING", "ERROR")
 
 
@@ -226,10 +228,10 @@ def _normalize_extensions(extensions: tuple[str, ...]) -> tuple[str, ...]:
 
 def _parse_transcription(section: _TomlSection) -> TranscriptionSettings:
     return TranscriptionSettings(
-        model=section.text("model", "large-v3"),
+        model=section.text("model", DEFAULT_MODEL),
         language=section.text("language", "pt"),
-        device=section.choice("device", "cuda", ("cuda", "cpu", "auto")),
-        compute_type=section.text("compute_type", "int8_float16"),
+        device=section.choice("device", "auto", ("auto", "cuda", "cpu")),
+        compute_type=section.text("compute_type", "auto"),
         beam_size=section.positive_integer("beam_size", 5),
         vad_filter=section.flag("vad_filter", True),
     )

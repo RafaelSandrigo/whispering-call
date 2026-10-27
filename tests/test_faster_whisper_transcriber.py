@@ -1,11 +1,13 @@
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
 
-from fakes import FakeWhisperModel, FakeWhisperSegment, WhisperCall
+from fakes import FakeCudaProbe, FakeWhisperModel, FakeWhisperSegment, WhisperCall
 from whispering_call.config import TranscriptionSettings
 from whispering_call.faster_whisper_transcriber import (
     FasterWhisperTranscriber,
+    ResolvingModelFactory,
     WhisperModelLike,
     completed_fraction,
 )
@@ -75,3 +77,16 @@ def test_completed_fraction_is_clamped(
     done: float, total: float, expected: float
 ) -> None:
     assert completed_fraction(done, total) == expected
+
+
+def test_resolving_factory_loads_model_with_resolved_settings_and_notifies() -> None:
+    inner = CountingModelFactory(FakeWhisperModel([], duration=1.0))
+    notices: list[str] = []
+    factory = ResolvingModelFactory(
+        FakeCudaProbe(available=False, reason="só Intel"), notices.append, inner
+    )
+
+    factory(replace(SETTINGS, device="auto", compute_type="auto"))
+
+    assert [(s.device, s.compute_type) for s in inner.created_with] == [("cpu", "int8")]
+    assert len(notices) == 1 and "só Intel" in notices[0]

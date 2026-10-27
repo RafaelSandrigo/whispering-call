@@ -7,16 +7,14 @@ dependência de um ``ffmpeg`` instalado no sistema.
 
 from __future__ import annotations
 
-import sys
 from collections.abc import Callable, Iterable
+import logging
 from pathlib import Path
 from typing import Protocol
 
 from whispering_call.config import TranscriptionSettings
-from whispering_call.cuda_runtime import (
-    SystemNativeLibraryLoader,
-    register_nvidia_libraries,
-)
+from whispering_call.cuda_runtime import CudaProbe
+from whispering_call.device_selection import resolve_runtime
 from whispering_call.transcription import ProgressCallback, TranscriptSegment
 
 
@@ -42,27 +40,66 @@ class WhisperModelLike(Protocol):
     ) -> tuple[Iterable[WhisperSegmentLike], WhisperInfoLike]: ...
 
 
+logger = logging.getLogger(__name__)
+
 WhisperModelFactory = Callable[[TranscriptionSettings], WhisperModelLike]
 
 
 def load_faster_whisper_model(settings: TranscriptionSettings) -> WhisperModelLike:
     """Cria o ``WhisperModel`` real (baixa o modelo no primeiro uso, ~3 GB p/ large-v3).
 
+    Espera ``device``/``compute_type`` já resolvidos (ver ``ResolvingModelFactory``).
     A importação é tardia: ela carrega CTranslate2/CUDA e custaria segundos
     mesmo em execuções sem gravações novas.
 
     Exemplo::
 
-        model = load_faster_whisper_model(config.transcription)
+        model = load_faster_whisper_model(resolved_settings)
     """
-    if settings.device != "cpu":
-        register_nvidia_libraries(SystemNativeLibraryLoader(), sys.platform)
     from faster_whisper import WhisperModel
 
     model: WhisperModelLike = WhisperModel(
         settings.model, device=settings.device, compute_type=settings.compute_type
     )
     return model
+
+
+class ResolvingModelFactory:
+    """Resolve GPU/CPU na primeira transcrição e só então carrega o modelo.
+
+    A resolução é tardia pelo mesmo motivo da importação do faster-whisper:
+    sondar a GPU carrega o CTranslate2 e não deve custar nada quando não há
+    gravações novas.
+
+    Exemplo::
+
+        factory = ResolvingModelFactory(probe, on_notice=reporter.info)
+        FasterWhisperTranscriber(config.transcription, factory)
+    """
+
+    def __init__(
+        self,
+        probe: CudaProbe,
+        on_notice: Callable[[str], None],
+        load_model: WhisperModelFactory = load_faster_whisper_model,
+    ) -> None:
+        self._probe = probe
+        self._on_notice = on_notice
+        self._load_model = load_model
+
+    def __call__(self, settings: TranscriptionSettings) -> WhisperModelLike:
+        choice = resolve_runtime(settings, self._probe)
+        logger.info(
+            "transcription_runtime_resolved",
+            extra={
+                "fields": {
+                    "requested_device": settings.device,
+                    "message": choice.message,
+                }
+            },
+        )
+        self._on_notice(choice.message)
+        return self._load_model(choice.settings)
 
 
 class FasterWhisperTranscriber:
