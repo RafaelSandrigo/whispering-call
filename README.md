@@ -65,6 +65,23 @@ copy config.example.toml config.toml
 Edite o `config.toml`, principalmente `[recordings].folder`. Todas as opções
 estão comentadas no próprio [config.example.toml](config.example.toml).
 
+### Atalho na Área de Trabalho (Windows)
+
+Depois de instalar e criar o `config.toml`, rode uma vez na pasta do projeto:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\create-desktop-shortcut.ps1
+```
+
+Isso cria o atalho **Whispering Call** (ícone em `assets/whispering-call.ico`).
+Dois cliques nele abrem o PowerShell na pasta do projeto e rodam
+`uv run whispering-call run --all`: processa **todas** as gravações pendentes,
+sem a pergunta de quantas. No fim, a janela espera um Enter para fechar.
+
+- Outro nome: `-ShortcutName "Atas"`.
+- O caminho do `uv` e da pasta do projeto ficam gravados no atalho. Se mover o
+  projeto ou reinstalar o `uv` em outro lugar, rode o script de novo.
+
 ## Passo a passo: processar uma gravação nova
 
 Com a instalação e o `config.toml` prontos:
