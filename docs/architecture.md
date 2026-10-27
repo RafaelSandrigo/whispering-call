@@ -125,9 +125,31 @@ O PyAV 19 removeu o argumento `metadata_errors` usado pelo faster-whisper 1.2.x
 O CTranslate2 (motor do faster-whisper) ainda não tem wheels estáveis para o
 3.14. O uv provisiona o 3.12 isolado (`.python-version`).
 
+### Atalho do Windows (`scripts/create-desktop-shortcut.ps1`)
+O atalho roda `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command
+"... uv run whispering-call run --all ..."` com a pasta do projeto como
+diretório de trabalho.
+
+- `--all`: o atalho é o fluxo "processar tudo que está pendente", sem a pergunta
+  de quantas. Quem quiser limitar usa o terminal (`--limit N`).
+- O caminho absoluto do `uv` é resolvido na criação (`Get-Command uv`) e gravado
+  no atalho. Um atalho não herda o PATH de um terminal já aberto, e o winget às
+  vezes só atualiza o PATH em sessões novas.
+- `-ExecutionPolicy Bypass` vale só para esse processo e não muda a política da
+  máquina. Ele é necessário porque a política padrão do Windows bloqueia `.ps1`.
+- A janela termina com `Read-Host` para o resumo não sumir quando o processo sai.
+  No modo `same_terminal`, o Claude abre na própria janela do atalho.
+- O `.ps1` é salvo em UTF-8 **com BOM** e CRLF. O Windows PowerShell 5.1 lê
+  arquivos sem BOM como ANSI e corrompe os acentos das mensagens.
+- Os caminhos entram no comando entre aspas simples, com `'` dobrado, para que
+  pastas com espaço, `$` ou `'` não quebrem o comando.
+- `assets/whispering-call.ico` é um arquivo estático (16 a 256 px), gerado uma
+  vez com Pillow e versionado. O gerador não faz parte do projeto.
+
 ## Compatibilidade Windows/Linux
 
 - Todos os arquivos são lidos e gravados com `encoding="utf-8"` explícito (o padrão no Windows é cp1252).
 - `Recording.key` usa separador POSIX, e os nomes de pasta removem caracteres proibidos no Windows.
 - O executável é resolvido com `shutil.which` (`claude` vira `claude.exe` no Windows).
 - O template de nova janela tem um padrão por SO e pode ser trocado na config.
+- O atalho de Área de Trabalho existe só no Windows (`scripts/create-desktop-shortcut.ps1`). No Linux, rode `uv run whispering-call run --all` ou crie um `.desktop` manualmente.

@@ -81,6 +81,10 @@ sem a pergunta de quantas. No fim, a janela espera um Enter para fechar.
 - Outro nome: `-ShortcutName "Atas"`.
 - O caminho do `uv` e da pasta do projeto ficam gravados no atalho. Se mover o
   projeto ou reinstalar o `uv` em outro lugar, rode o script de novo.
+- Rodar de novo sobrescreve o atalho existente; para removê-lo, apague o
+  `.lnk` da Área de Trabalho.
+- Decisões (por que `--all`, `-ExecutionPolicy Bypass`, BOM UTF-8):
+  [docs/architecture.md](docs/architecture.md#atalho-do-windows-scriptscreate-desktop-shortcutps1).
 
 ## Passo a passo: processar uma gravação nova
 
@@ -220,6 +224,9 @@ um objeto por linha, em `output/whispering-call.log`:
 | `Executável do Claude Code não encontrado` | Instale o Claude Code ou aponte `[claude].executable` para o caminho absoluto. |
 | Nova janela não abre | Ajuste `[claude].new_window_command` para o seu terminal (exemplos no `config.example.toml`). |
 | Windows + `new_window` recusa caminho com `&`, `%`, `^`... | Limitação do `cmd.exe`. Renomeie a pasta ou use `same_terminal`. |
+| `create-desktop-shortcut.ps1 não pode ser carregado... execução de scripts foi desabilitada` | Política de execução do Windows. Rode com `powershell -ExecutionPolicy Bypass -File ...` (como no comando acima), e não com `.\scripts\...` direto. |
+| `uv não encontrado no PATH` ao criar o atalho | Instale o uv e abra um **novo** PowerShell (o PATH só atualiza em janelas novas). |
+| Atalho mostra "não é reconhecido como nome de cmdlet" ou fica sem ícone | O projeto ou o `uv` mudaram de lugar. Rode `create-desktop-shortcut.ps1` de novo. |
 
 ## Desenvolvimento
 
